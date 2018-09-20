@@ -1,0 +1,9 @@
+{
+  "name": "qps-koa",
+  "version": "1.0.0",
+  "description": "qps test for koa",
+  "private": true,
+  "dependencies": {
+    "koa": "^2.5.3"
+  }
+}
