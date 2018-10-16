@@ -4,11 +4,15 @@
 from sanic import Sanic, response
 
 app = Sanic()
+responses = dict()
 
-@app.route('/')
-async def test(request):
+@app.route('/<msize:int>')
+async def test(request, msize):
+    if msize not in responses:
+        responses[msize] = 'X' * msize
+
     return response.text(
-        "<html><h1>rps test</h1></html>",
+        responses[msize],
         headers={"Content-Type": "text/html; charset=utf-8"},
         status=200
     )
