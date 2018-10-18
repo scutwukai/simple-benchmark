@@ -1,33 +1,82 @@
-var http = require('http');
+"use strict";
+
+const multiparty = require("multiparty");
+
+const Koa = require("koa")
+const app = new Koa();
 
 
-const HOST = "127.0.0.1";
-const PORT = 3000;
-var responses = {};
 
+async function parseForm(req) {
+    return new Promise((rs, rj) => {
+        let length = 0, form = new multiparty.Form();
 
-function handle(request, response) {
-    var msize = request.url.substr(1);
+        // Errors may be emitted
+        // Note that if you are listening to 'part' events, the same error may be
+        // emitted from the `form` and the `part`.
+        form.on('error', function(err) {
+          console.log('Error parsing form: ' + err.stack);
+        });
 
-    if (!msize) {
-        msize = 1024;
-    } else {
-        msize = parseInt(msize, 10);
-    }
+        // Parts are emitted when parsing the form
+        form.on('part', function(part) {
+          // You *must* act on the part by reading it
+          // NOTE: if you want to ignore it, just call "part.resume()"
 
-    if (!responses[msize]) {
-        // for Node.js v4
-        //responses[msize] = new Buffer(msize).fill("X");
-        // for Node.js v6
-        responses[msize] = Buffer.alloc(msize, "X");
-    }
+          if (!part.filename) {
+            // filename is not defined when this is a field and not a file
+            //console.log('got field named ' + part.name);
 
-    response.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    response.end(responses[msize]);
+            // ignore field's content
+            part.resume();
+          }
+
+          if (part.filename) {
+            // filename is defined when this is a file
+            //console.log('got file named ' + part.name);
+
+            part.on('data', function(data) {
+                //console.log('File [' + part.name + '] got ' + data.length + ' bytes');
+                length += data.length;
+            });
+
+            part.on('end', function(data) {
+                //console.log('File [' + part.name + '] Finished');
+                rs(length);
+            });
+          }
+
+          part.on('error', function(err) {
+            // decide what to do
+          });
+        });
+
+        // Close emitted after form parsed
+        form.on('close', function() {
+          //console.log('Upload completed!');
+        });
+
+        // Parse req
+        form.parse(req);
+    });
 }
 
+var responses = {};
+app.use(async (ctx, next) => {
+    ctx.set("Content-Type", "text/plain; charset=utf-8");
 
-var server = http.createServer(handle);
-server.listen({host: HOST, port: PORT}, function() {
-    console.log(`Serving on ${HOST}:${PORT}`);
+    if (ctx.url === "/form") {
+        ctx.body = await parseForm(ctx.req);
+
+    } else {
+        let msize = parseInt(ctx.url.slice(1));
+
+        if (!responses[msize]) {
+            responses[msize] = Buffer.alloc(msize, "X");
+        }
+
+        ctx.body = responses[msize]
+    } 
 });
+
+app.listen(3000);

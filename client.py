@@ -57,16 +57,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--wrk', default='wrk', type=str,
                         help='wrk location')
-    parser.add_argument('--msize', default=1000, type=int,
-                        help='message size in bytes')
-    parser.add_argument('--duration', '-T', default=30, type=int,
+    parser.add_argument('--threads', '-t', default=4, type=int,
+                        help='threads of test')
+    parser.add_argument('--duration', '-d', default=30, type=int,
                         help='duration of test in seconds')
-    parser.add_argument('--concurrency', default=100, type=int,
+    parser.add_argument('--concurrency', '-c', default=100, type=int,
                         help='request concurrency')
     parser.add_argument('--addr', default='127.0.0.1:3000', type=str,
                         help='server address')
     parser.add_argument('--output-format', default='text', type=str,
                         help='output format', choices=['text', 'json'])
+    parser.add_argument('--lua-script', '-S', default=None, type=str,
+                        help='wrk lua script')
     args = parser.parse_args()
 
     unix = False
@@ -74,14 +76,21 @@ if __name__ == '__main__':
         abort('Unix sockets are not supported')
 
     with tempfile.NamedTemporaryFile(mode='w+t', delete=False) as luaf:
+        if args.lua_script:
+            fp = open(args.lua_script, 'r')
+            luaf.write(fp.read())
+            luaf.write('\n')
+            fp.close()
+
         luaf.write(luascript)
         lua_script_path = luaf.name
 
-    wrk = [args.wrk, '-t4', '--latency',# '--header=Connection: close',
+    wrk = [args.wrk, '--latency', #'--header=Connection: close',
+           '--threads={}'.format(args.threads),
            '--duration={}s'.format(args.duration),
            '--connections={}'.format(args.concurrency),
            '--script={}'.format(lua_script_path),
-           'http://{}/{}'.format(args.addr, args.msize)]
+           'http://{}'.format(args.addr)]
 
     try:
         wrk_run = subprocess.Popen(wrk, universal_newlines=True,
@@ -101,12 +110,12 @@ if __name__ == '__main__':
             '{}%   {}ms'.format(*v) for v in data['latency_percentiles'])
 
         output = '''\
-{messages} {size}KiB messages in {duration} seconds
+{messages} messages in {duration} seconds
 Latency: min {latency_min}ms; max {latency_max}ms; mean {latency_mean}ms; \
 std: {latency_std}ms ({latency_cv}%)
 Latency distribution: \n  {latency_percentiles}
 Requests/sec: {rps}
 Transfer/sec: {transfer}MiB
-'''.format(duration=args.duration, size=round(args.msize / 1024, 2), **data)
+'''.format(duration=args.duration, **data)
 
         print(output)

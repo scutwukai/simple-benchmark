@@ -4,6 +4,7 @@
   "description": "qps test for koa",
   "private": true,
   "dependencies": {
-    "koa": "^2.5.3"
+    "koa": "^2.5.3",
+    "multiparty": "^4.2.1"
   }
 }
