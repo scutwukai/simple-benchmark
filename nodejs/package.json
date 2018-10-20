@@ -4,7 +4,10 @@
   "description": "qps test for koa",
   "private": true,
   "dependencies": {
+    "configparser": "^0.2.6",
+    "ioredis": "^4.2.0",
     "koa": "^2.5.3",
-    "multiparty": "^4.2.1"
+    "multiparty": "^4.2.1",
+    "mysql": "^2.16.0"
   }
 }

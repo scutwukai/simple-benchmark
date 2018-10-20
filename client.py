@@ -65,7 +65,7 @@ if __name__ == '__main__':
                         help='request concurrency')
     parser.add_argument('--addr', default='127.0.0.1:3000', type=str,
                         help='server address')
-    parser.add_argument('--output-format', default='text', type=str,
+    parser.add_argument('--output-format', '-o', default='text', type=str,
                         help='output format', choices=['text', 'json'])
     parser.add_argument('--lua-script', '-S', default=None, type=str,
                         help='wrk lua script')

@@ -1,11 +1,27 @@
-"use strict";
+'use strict';
 
-const multiparty = require("multiparty");
+const mysql = require('mysql');
+const Redis = require('ioredis');
+const multiparty = require('multiparty');
+const querystring = require('querystring');
 
-const Koa = require("koa")
+const ConfigParser = require('configparser');
+const config = new ConfigParser();
+config.read('my.cnf');
+
+let redis = new Redis('//localhost:6379');
+let pool = mysql.createPool({
+    connectionLimit: 100,
+    host: config.get('client', 'host'),
+    port: config.get("client", "port"),
+    user: config.get("client", "user"),
+    password: config.get("client", "password"),
+    db: config.get("client", "db"),
+    charset: config.get("client", "charset")
+});
+
+const Koa = require('koa')
 const app = new Koa();
-
-
 
 async function parseForm(req) {
     return new Promise((rs, rj) => {
@@ -21,7 +37,7 @@ async function parseForm(req) {
         // Parts are emitted when parsing the form
         form.on('part', function(part) {
           // You *must* act on the part by reading it
-          // NOTE: if you want to ignore it, just call "part.resume()"
+          // NOTE: if you want to ignore it, just call 'part.resume()'
 
           if (!part.filename) {
             // filename is not defined when this is a field and not a file
@@ -61,18 +77,58 @@ async function parseForm(req) {
     });
 }
 
-var responses = {};
-app.use(async (ctx, next) => {
-    ctx.set("Content-Type", "text/plain; charset=utf-8");
+async function parseBody(ctx) {
+    return new Promise((rs, rj) => {
+        let buf = Buffer.alloc(ctx.request.length);
+        let received = 0;
 
-    if (ctx.url === "/form") {
+        ctx.req.on("data", (chunk) => {
+            let copied = chunk.copy(buf, received);
+            received += copied;
+        });
+
+        ctx.req.on("end", () => {
+            rs(querystring.parse(buf.toString()));
+        }); 
+    });
+}
+
+async function query(sql) {
+    return new Promise((rs, rj) => {
+        pool.getConnection((err, connection) => {
+            connection.query(sql, (err, results, fields) => {
+                connection.release();
+                rs([results, fields]);
+            })
+        })
+    });
+}
+
+
+let responses = {};
+app.use(async (ctx, next) => {
+    ctx.set('Content-Type', 'text/plain; charset=utf-8');
+
+    if (ctx.url === '/form') {
         ctx.body = await parseForm(ctx.req);
+
+    } else if (ctx.url === '/redis') {
+        let key = (await parseBody(ctx)).key;
+
+        await redis.set(key, 'hello redis');
+        ctx.body = await redis.get(key);
+
+    } else if (ctx.url === '/mysql') {
+        let sql = (await parseBody(ctx)).sql;
+        let [results, fields] = await query(sql);
+
+        ctx.body = results[0][fields[0].name]
 
     } else {
         let msize = parseInt(ctx.url.slice(1));
 
         if (!responses[msize]) {
-            responses[msize] = Buffer.alloc(msize, "X");
+            responses[msize] = Buffer.alloc(msize, 'X');
         }
 
         ctx.body = responses[msize]
